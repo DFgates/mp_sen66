@@ -35,7 +35,7 @@ class SEN66:
             self.address = address
         self.commands = {
                 'activate_sht_heater': {'code': [0x67, 0x65], 'delay':20, 'length':0, 'mode': 'idle'},
-                'device_reset':        {'code': [0xd3, 0x04], 'delay':1200, 'length':0, 'mode':'idle'},
+                'device_reset':        {'code': [0xd3, 0x04], 'delay':1200, 'length':0, 'mode':'both'},
                 'get_ambient_pressure':{'code': [0x67, 0x20], 'delay':20, 'length':3, 'mode': 'both'}, 
                 'get_data_ready':      {'code': [0x02, 0x02], 'delay':20, 'length':3, 'mode': 'measurement'},
                 'get_product_name' :   {'code': [0xd0, 0x14], 'delay':20, 'length':48, 'mode': 'both'},
@@ -148,6 +148,14 @@ class SEN66:
         self.__I2C_write('start_measurement')
         self.mode = 'measurement'
         
+    def reset(self):
+        """ Reset the sensor. This has the same effect as a power cycle.
+        The device returns to idle mode after a reset.
+        Blocks for ~1200 ms (via __I2C_write) while the sensor reboots.
+        """
+        self.__I2C_write('device_reset')
+        self.mode = 'idle'
+
     def stop(self):
         if self.mode == 'idle':
             return
@@ -289,6 +297,9 @@ if __name__ == "__main__":
             time.sleep(1)
         except KeyboardInterrupt:
             running = False
+        except OSError as e:
+            print('I2C error:', e)
+            time.sleep(1)
     sen.stop()
 
     
