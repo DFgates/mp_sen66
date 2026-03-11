@@ -157,22 +157,32 @@ class SEN66:
             pm2p5 = self.parse_crc(data[3], data[4], data[5])
             pm4p0 = self.parse_crc(data[6], data[7], data[8])
             pm10p0 = self.parse_crc(data[9], data[10], data[11])
-            amb_hum = self.parse_crc(data[12], data[13], data[14], signed=True)
-            amb_temp = self.parse_crc(data[15], data[16], data[17], signed=True)
+            humidity = self.parse_crc(data[12], data[13], data[14], signed=True)
+            temperature = self.parse_crc(data[15], data[16], data[17], signed=True)
             voc = self.parse_crc(data[18], data[19], data[20], signed=True)
             nox = self.parse_crc(data[21], data[22], data[23], signed=True)
             co2 = self.parse_crc(data[24], data[25], data[26])
-            if None in (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2):
+            if None in (pm1p0, pm2p5, pm4p0, pm10p0, humidity, temperature, voc, nox, co2):
                 return None
             pm1p0 = pm1p0 / 10
             pm2p5 = pm2p5 / 10
             pm4p0 = pm4p0 / 10
             pm10p0 = pm10p0 / 10
-            amb_hum = amb_hum / 100
-            amb_temp = amb_temp / 200
+            humidity = humidity / 100
+            temperature = temperature / 200
             voc = voc / 10
             nox = nox / 10
-            data = (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2) 
+            data = {
+                'pm1p0': pm1p0,
+                'pm2p5': pm2p5,
+                'pm4p0': pm4p0,
+                'pm10p0': pm10p0,
+                'humidity': humidity,
+                'temperature': temperature,
+                'voc': voc,
+                'nox': nox,
+                'co2': co2,
+            }
         self.clean()
         return data
             
