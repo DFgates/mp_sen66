@@ -151,6 +151,7 @@ class SEN66:
     def reset(self):
         """ Reset the sensor. This has the same effect as a power cycle.
         The device returns to idle mode after a reset.
+        Blocks for ~1200 ms (via __I2C_write) while the sensor reboots.
         """
         self.__I2C_write('device_reset')
         self.mode = 'idle'
