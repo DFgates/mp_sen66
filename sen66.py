@@ -1,5 +1,4 @@
 import machine
-from micropython import const
 import time
 import random
 """
@@ -92,6 +91,8 @@ class SEN66:
           verbose: (default False) if true prints the status bits of the sensor
         """
         status = self.crc_all(self.__I2C_write('read_device_status'))
+        if status is None:
+            raise Exception('CRC error reading device status!')
         self.status = (status[0] << 24) + (status[1] << 16) + (status[3] << 8) + status[4]
         if verbose:
             print('Status bits:')
@@ -111,10 +112,15 @@ class SEN66:
             self.name = self.print_string(self.name)
         if self.name != 'SEN66':
             print(self.name)
-            raise Error('Something wrong with the sensorstring! Did you get an SEN66?')            
+            raise Exception('Something wrong with the sensorstring! Did you get an SEN66?')
         firmware = self.crc_all(self.__I2C_write('get_version'))
+        if firmware is None:
+            raise Exception('CRC error reading firmware version!')
         self.firmware = float("%d.%d" %(firmware[0], firmware[1]))
-        self.serial = self.print_string(self.crc_all(self.__I2C_write('get_serial_number')))
+        serial_data = self.crc_all(self.__I2C_write('get_serial_number'))
+        if serial_data is None:
+            raise Exception('CRC error reading serial number!')
+        self.serial = self.print_string(serial_data)
         if verbose:
             print('Sensor: ',self.name)
             print("Firmware version: %2.1f" %(self.firmware))
@@ -143,17 +149,27 @@ class SEN66:
             raise Exception('device not in measurement mode!')
         ready = self.__I2C_write('get_data_ready')
         data = None
-        if ready[1] == 1:
+        if ready[1] & 0x01:
             data = self.__I2C_write('read_measured_values')
-            pm1p0 = self.parse_crc(data[0], data[1], data[2])/10
-            pm2p5 = self.parse_crc(data[3], data[4], data[5])/10
-            pm4p0 = self.parse_crc(data[6], data[7], data[8])/10
-            pm10p0 = self.parse_crc(data[9], data[10], data[11])/10
-            amb_hum = self.parse_crc(data[12], data[13], data[14])/100
-            amb_temp = self.parse_crc(data[15], data[16], data[17])/200
-            voc = self.parse_crc(data[18], data[19], data[20])/10
-            nox = self.parse_crc(data[21], data[22], data[23])/10
+            pm1p0 = self.parse_crc(data[0], data[1], data[2])
+            pm2p5 = self.parse_crc(data[3], data[4], data[5])
+            pm4p0 = self.parse_crc(data[6], data[7], data[8])
+            pm10p0 = self.parse_crc(data[9], data[10], data[11])
+            amb_hum = self.parse_crc(data[12], data[13], data[14])
+            amb_temp = self.parse_crc(data[15], data[16], data[17])
+            voc = self.parse_crc(data[18], data[19], data[20])
+            nox = self.parse_crc(data[21], data[22], data[23])
             co2 = self.parse_crc(data[24], data[25], data[26])
+            if None in (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2):
+                return None
+            pm1p0 = pm1p0 / 10
+            pm2p5 = pm2p5 / 10
+            pm4p0 = pm4p0 / 10
+            pm10p0 = pm10p0 / 10
+            amb_hum = amb_hum / 100
+            amb_temp = amb_temp / 200
+            voc = voc / 10
+            nox = nox / 10
             data = (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2) 
         self.clean()
         return data
@@ -185,7 +201,7 @@ class SEN66:
     def __I2C_scan(self):
         self.wdt_feed()
         bus = self.i2c.scan()
-        if (len(bus) > 10) or (self.address not in bus):
+        if (self.address not in bus):
             print(bus, self.address)
             raise OSError("device not found! Are the cables connected?")
 
@@ -219,7 +235,7 @@ class SEN66:
         return crc
     
 if __name__ == "__main__":
-    i2c0 = machine.I2C(1, sda=machine.Pin(18), scl=machine.Pin(19), freq=100000)
+    i2c0 = machine.SoftI2C(sda=machine.Pin(5), scl=machine.Pin(6), freq=100000)  # XIAO ESP32-S3: SDA=GPIO5, SCL=GPIO6
     sen = SEN66(i2c0)
     sen.start()
     sen.clean(force=True) # force a cleanup of the sensor
@@ -231,5 +247,6 @@ if __name__ == "__main__":
             time.sleep(1)
         except KeyboardInterrupt:
             running = False
+    sen.stop()
 
     
