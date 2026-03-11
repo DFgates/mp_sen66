@@ -17,26 +17,7 @@ class SEN66:
     address = 0x6b #107
     clean_interval_bounds= (86400,2*86400) # clean every other day the fan
     mode = 'idle'
-    commands = {
-                'activate_sht_heater': {'code': [0x67, 0x65], 'delay':20, 'length':0, 'mode': 'idle'},
-                'device_reset':        {'code': [0xd3, 0x04], 'delay':1200, 'length':0, 'mode':'idle'},
-                'get_ambient_pressure':{'code': [0x67, 0x20], 'delay':20, 'length':3, 'mode': 'both'}, 
-                'get_data_ready':      {'code': [0x02, 0x02], 'delay':20, 'length':3, 'mode': 'measurement'},
-                'get_product_name' :   {'code': [0xd0, 0x14], 'delay':20, 'length':48, 'mode': 'both'},
-                'get_sensor_altitude': {'code': [0x67, 0x36], 'delay':20, 'length':3, 'mode': 'idle'}, 
-                'get_serial_number':   {'code': [0xd0, 0x33], 'delay':20, 'length':48, 'mode': 'both'},
-                'get_sht_heater_measurement':{'code':[0x67,0x90], 'delay':20, 'length':6, 'mode': 'idle'}, 
-                'get_version':         {'code': [0xd1, 0x00], 'delay':20, 'length':12, 'mode':'both'},
-                'start_fan_cleaning':  {'code': [0x56, 0x07], 'delay':20, 'length':0, 'mode': 'idle'},
-                'start_measurement':   {'code': [0x00,0x21], 'delay':50, 'length':0, 'mode': 'idle'},
-                'stop_measurement':    {'code': [0x01, 0x04], 'delay':1000, 'length':0, 'mode': 'measurement'},
-                'read_and_clear_device_status': {'code': [0xd2, 0x10], 'delay':20, 'length':6, 'mode':'both'},
-                'read_device_status':  {'code': [0xd2, 0x06], 'delay':20, 'length':6, 'mode':'both'},
-                'read_measured_raw' :  {'code': [0x04, 0x05], 'delay':20, 'length':15, 'mode': 'measurement'},
-                'read_measured_values':{'code': [0x03, 0x00], 'delay':20, 'length':27, 'mode':'measurement'},
-                'read_number_concentration': {'code': [0x03, 0x16], 'delay':20, 'length':15, 'mode':'measurement'},
-                }
-    
+
     def __init__(self, i2c, address=None, wdt=None):
         """ 
         Initialize the Sensirion SEN66 sensor
@@ -53,6 +34,25 @@ class SEN66:
         self.i2c = i2c
         if address:
             self.address = address
+        self.commands = {
+                'activate_sht_heater': {'code': [0x67, 0x65], 'delay':20, 'length':0, 'mode': 'idle'},
+                'device_reset':        {'code': [0xd3, 0x04], 'delay':1200, 'length':0, 'mode':'idle'},
+                'get_ambient_pressure':{'code': [0x67, 0x20], 'delay':20, 'length':3, 'mode': 'both'}, 
+                'get_data_ready':      {'code': [0x02, 0x02], 'delay':20, 'length':3, 'mode': 'measurement'},
+                'get_product_name' :   {'code': [0xd0, 0x14], 'delay':20, 'length':48, 'mode': 'both'},
+                'get_sensor_altitude': {'code': [0x67, 0x36], 'delay':20, 'length':3, 'mode': 'idle'}, 
+                'get_serial_number':   {'code': [0xd0, 0x33], 'delay':20, 'length':48, 'mode': 'both'},
+                'get_sht_heater_measurement':{'code':[0x67,0x90], 'delay':20, 'length':6, 'mode': 'idle'}, 
+                'get_version':         {'code': [0xd1, 0x00], 'delay':20, 'length':3, 'mode':'both'},
+                'start_fan_cleaning':  {'code': [0x56, 0x07], 'delay':20, 'length':0, 'mode': 'idle'},
+                'start_measurement':   {'code': [0x00,0x21], 'delay':50, 'length':0, 'mode': 'idle'},
+                'stop_measurement':    {'code': [0x01, 0x04], 'delay':1000, 'length':0, 'mode': 'measurement'},
+                'read_and_clear_device_status': {'code': [0xd2, 0x10], 'delay':20, 'length':6, 'mode':'both'},
+                'read_device_status':  {'code': [0xd2, 0x06], 'delay':20, 'length':6, 'mode':'both'},
+                'read_measured_raw' :  {'code': [0x04, 0x05], 'delay':20, 'length':15, 'mode': 'measurement'},
+                'read_measured_values':{'code': [0x03, 0x00], 'delay':20, 'length':27, 'mode':'measurement'},
+                'read_number_concentration': {'code': [0x03, 0x16], 'delay':20, 'length':15, 'mode':'measurement'},
+                }
         self.__I2C_scan()
         self.wdt_feed()
         self.get_id()
@@ -93,10 +93,11 @@ class SEN66:
         status = self.crc_all(self.__I2C_write('read_device_status'))
         if status is None:
             raise Exception('CRC error reading device status!')
-        self.status = (status[0] << 24) + (status[1] << 16) + (status[3] << 8) + status[4]
+        status = self.strip_crc(status)
+        self.status = (status[0] << 24) + (status[1] << 16) + (status[2] << 8) + status[3]
         if verbose:
             print('Status bits:')
-            print('{0:016b}'.format(self.status))
+            print('{0:032b}'.format(self.status))
     
     def get_id(self, verbose=False):
         """ Get the product name, serial number and firmware version of the sensor
@@ -135,6 +136,10 @@ class SEN66:
             return data
         else:
             return None
+
+    def strip_crc(self, data):
+        """ Return a new bytes object with CRC bytes removed (every 3rd byte). """
+        return bytes(data[ii] for ii in range(len(data)) if (ii % 3) != 2)
             
     def start(self):
         self.__I2C_write('start_measurement')
@@ -147,18 +152,18 @@ class SEN66:
     def get_data(self):
         if self.mode != 'measurement':
             raise Exception('device not in measurement mode!')
-        ready = self.__I2C_write('get_data_ready')
+        ready = self.crc_all(self.__I2C_write('get_data_ready'))
         data = None
-        if ready[1] & 0x01:
+        if ready is not None and ready[1] & 0x01:
             data = self.__I2C_write('read_measured_values')
             pm1p0 = self.parse_crc(data[0], data[1], data[2])
             pm2p5 = self.parse_crc(data[3], data[4], data[5])
             pm4p0 = self.parse_crc(data[6], data[7], data[8])
             pm10p0 = self.parse_crc(data[9], data[10], data[11])
-            amb_hum = self.parse_crc(data[12], data[13], data[14])
-            amb_temp = self.parse_crc(data[15], data[16], data[17])
-            voc = self.parse_crc(data[18], data[19], data[20])
-            nox = self.parse_crc(data[21], data[22], data[23])
+            amb_hum = self.parse_crc(data[12], data[13], data[14], signed=True)
+            amb_temp = self.parse_crc(data[15], data[16], data[17], signed=True)
+            voc = self.parse_crc(data[18], data[19], data[20], signed=True)
+            nox = self.parse_crc(data[21], data[22], data[23], signed=True)
             co2 = self.parse_crc(data[24], data[25], data[26])
             if None in (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2):
                 return None
@@ -170,8 +175,8 @@ class SEN66:
             amb_temp = amb_temp / 200
             voc = voc / 10
             nox = nox / 10
-            data = (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2) 
-        self.clean()
+            data = (pm1p0, pm2p5, pm4p0, pm10p0, amb_hum, amb_temp, voc, nox, co2)
+            self.clean()
         return data
             
     def clean(self, force=False):
@@ -182,8 +187,9 @@ class SEN66:
             # set new times
             self.clean_interval = random.randint(self.clean_interval_bounds[0], self.clean_interval_bounds[1])
             self.t0 = now
-            # stop measurement, clean, and start gain
+            # stop measurement, clean, and start again
             self.__I2C_write('stop_measurement')
+            self.mode = 'idle'
             self.wdt_feed()
             time.sleep(1)
             self.__I2C_write('start_fan_cleaning')
@@ -191,12 +197,16 @@ class SEN66:
                 self.wdt_feed()
                 time.sleep(3)
             self.__I2C_write('start_measurement')
+            self.mode = 'measurement'
         
                
-    def parse_crc(self, b1, b2, crc):
+    def parse_crc(self, b1, b2, crc, signed=False):
         if self.__CRC([b1, b2]) != crc:
             return None
-        return (b1 << 8) + b2
+        value = (b1 << 8) + b2
+        if signed and value >= 0x8000:
+            value -= 0x10000
+        return value
     
     def __I2C_scan(self):
         self.wdt_feed()
@@ -207,6 +217,9 @@ class SEN66:
 
     def __I2C_write(self, command):
         self.wdt_feed()
+        required_mode = self.commands[command]['mode']
+        if required_mode != 'both' and required_mode != self.mode:
+            raise Exception("Command '%s' requires mode '%s', but current mode is '%s'!" % (command, required_mode, self.mode))
         self.i2c.writeto(self.address, bytearray(self.commands[command]['code']))
         time.sleep(self.commands[command]['delay']/1000)
         self.wdt_feed()
