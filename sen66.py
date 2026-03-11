@@ -1,6 +1,3 @@
-import machine
-import time
-import random
 """
 Library for the Sensirion SEN66 multi-sensor module.
 
@@ -8,17 +5,18 @@ Hardware Connections:
  - VCC: 3.3 V (only 1 wire has to be connected)
  - Ground (only 1 wire has to be connected)
  - I2C: @100 kHz
-
-Code is not yet compleet. Working with default settings and able to read out
-measurement values
 """
+
+import machine
+import time
+import random
 
 class SEN66:
     address = 0x6b #107
     clean_interval_bounds= (86400,2*86400) # clean every other day the fan
     mode = 'idle'
 
-    def __init__(self, i2c, address=None, wdt=None):
+    def __init__(self, i2c, address=None, wdt=None, altitude=85):
         """ 
         Initialize the Sensirion SEN66 sensor
 
@@ -26,6 +24,7 @@ class SEN66:
            i2c: i2c object connected to the bus where the sensor is connected.
            address: (optional) I2C address of the sensor, default 0x6B
            wdt: (optional) watchdog-timer object with a feed argument. Will feed every other second orso.
+           altitude: (optional) altitude in meters above sea level for CO₂ compensation, default 85 (Arlington, VA)
 
         raises:
            raises an error if the sensor can not be detected on the I2C bus.
@@ -44,6 +43,7 @@ class SEN66:
                 'get_serial_number':   {'code': [0xd0, 0x33], 'delay':20, 'length':48, 'mode': 'both'},
                 'get_sht_heater_measurement':{'code':[0x67,0x90], 'delay':20, 'length':6, 'mode': 'idle'}, 
                 'get_version':         {'code': [0xd1, 0x00], 'delay':20, 'length':3, 'mode':'both'},
+                'set_sensor_altitude': {'code': [0x67, 0x36], 'delay':20, 'length':0, 'mode': 'idle'},
                 'start_fan_cleaning':  {'code': [0x56, 0x07], 'delay':20, 'length':0, 'mode': 'idle'},
                 'start_measurement':   {'code': [0x00,0x21], 'delay':50, 'length':0, 'mode': 'idle'},
                 'stop_measurement':    {'code': [0x01, 0x04], 'delay':1000, 'length':0, 'mode': 'measurement'},
@@ -56,6 +56,7 @@ class SEN66:
         self.__I2C_scan()
         self.wdt_feed()
         self.get_id()
+        self.set_sensor_altitude(altitude)
         self.clean_interval = random.randint(self.clean_interval_bounds[0], self.clean_interval_bounds[1])
         self.t0 = time.time()
         self.wdt_feed()
@@ -142,12 +143,38 @@ class SEN66:
         return bytes(data[ii] for ii in range(len(data)) if (ii % 3) != 2)
             
     def start(self):
+        if self.mode == 'measurement':
+            return
         self.__I2C_write('start_measurement')
         self.mode = 'measurement'
         
     def stop(self):
+        if self.mode == 'idle':
+            return
         self.__I2C_write('stop_measurement')
         self.mode = 'idle'
+
+    def set_sensor_altitude(self, altitude):
+        """ Set the sensor altitude for CO₂ concentration compensation.
+
+        arguments:
+          altitude: altitude in meters above sea level (0–3000)
+        raises:
+          ValueError: if altitude is outside the valid range.
+          Exception: if the sensor is not in idle mode.
+        """
+        if not (0 <= altitude <= 3000):
+            raise ValueError('Altitude must be between 0 and 3000 meters')
+        if self.mode != 'idle':
+            raise Exception("Command 'set_sensor_altitude' requires mode 'idle', but current mode is '%s'!" % self.mode)
+        high_byte = (altitude >> 8) & 0xff
+        low_byte = altitude & 0xff
+        crc = self.__CRC([high_byte, low_byte])
+        self.wdt_feed()
+        cmd = self.commands['set_sensor_altitude']
+        self.i2c.writeto(self.address, bytearray(cmd['code'] + [high_byte, low_byte, crc]))
+        time.sleep(cmd['delay'] / 1000)
+        self.wdt_feed()
         
     def get_data(self):
         if self.mode != 'measurement':
@@ -253,7 +280,7 @@ class SEN66:
     
 if __name__ == "__main__":
     i2c0 = machine.SoftI2C(sda=machine.Pin(5), scl=machine.Pin(6), freq=100000)  # XIAO ESP32-S3: SDA=GPIO5, SCL=GPIO6
-    sen = SEN66(i2c0)
+    sen = SEN66(i2c0, altitude=85)  # 85 m above sea level (Arlington, VA 22201)
     sen.start()
     sen.clean(force=True) # force a cleanup of the sensor
     #for ii in range(5):

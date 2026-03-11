@@ -24,7 +24,7 @@ If there has been enough time (somewhere between one and 2 days) since the last 
 ```python
 from sen66 import SEN66
 i2c0 = machine.I2C(0, sda=machine.Pin(0), scl=machine.Pin(1), freq=100000)
-sen = SEN66(i2c0)
+sen = SEN66(i2c0, altitude=85)  # altitude in meters above sea level (default 85 m, Arlington VA)
 sen.start()
 for ii in range(5):
     data = sen.get_data()
