@@ -135,10 +135,14 @@ class SEN66:
             return None
             
     def start(self):
+        if self.mode == 'measurement':
+            return
         self.__I2C_write('start_measurement')
         self.mode = 'measurement'
         
     def stop(self):
+        if self.mode == 'idle':
+            return
         self.__I2C_write('stop_measurement')
         self.mode = 'idle'
         
@@ -180,17 +184,20 @@ class SEN66:
             # set new times
             self.clean_interval = random.randint(self.clean_interval_bounds[0], self.clean_interval_bounds[1])
             self.t0 = now
-            # stop measurement, clean, and start again
-            self.__I2C_write('stop_measurement')
-            self.mode = 'idle'
-            self.wdt_feed()
-            time.sleep(1)
+            # stop measurement (if running), clean, then restore previous state
+            was_measuring = (self.mode == 'measurement')
+            if was_measuring:
+                self.__I2C_write('stop_measurement')
+                self.mode = 'idle'
+                self.wdt_feed()
+                time.sleep(1)
             self.__I2C_write('start_fan_cleaning')
             for ii in range(5):
                 self.wdt_feed()
                 time.sleep(3)
-            self.__I2C_write('start_measurement')
-            self.mode = 'measurement'
+            if was_measuring:
+                self.__I2C_write('start_measurement')
+                self.mode = 'measurement'
         
                
     def parse_crc(self, b1, b2, crc, signed=False):
