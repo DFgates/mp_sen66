@@ -34,3 +34,15 @@ for ii in range(5):
 ```
 
 If the watch-dog timer is used, a WDT object can be passed to the SEN66 initializing function and every second orso the watchdog is fed with an update.
+
+## First-Time Startup
+
+1. **Upload** `sen66.py` to the ESP32 root filesystem.
+2. **Connect via REPL** and run the `__main__` block to verify I2C and readings:
+   ```
+   mpremote connect /dev/cu.usbserial-0001 run sen66.py
+   ```
+3. **First-ever power-on**: The VOC and NOx algorithms need approximately 24 hours of continuous operation to fully condition. During this period readings will drift — this is normal. After the initial conditioning, they stabilize within minutes of each restart.
+4. **CO2 readings** improve over the first hour of operation as the sensor's internal algorithm warms up.
+5. **Fan cleaning**: Consider running `sen.clean(force=True)` on the first run to flush the sensor. The driver handles periodic fan cleaning automatically after that (randomized 1–2 day interval).
+6. **Data readiness**: After calling `sen.start()`, the sensor needs roughly 1 second before `get_data()` returns non-`None` values. The first few readings may show `0` or `0xFFFF` for some fields — wait 15–30 seconds for stable output.
