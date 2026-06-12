@@ -129,14 +129,10 @@ class SEN66:
             print("Serial: ", self.serial)
             
     def crc_all(self, data):
-        crc = 0
-        for ii in range(len(data)//3):
-            item = ii*3
-            crc += self.__CRC([data[item], data[item+1]]) - data[item+2]
-        if crc == 0:
-            return data
-        else:
-            return None
+        for ii in range(0, len(data) - 2, 3):
+            if self.__CRC([data[ii], data[ii+1]]) != data[ii+2]:
+                return None
+        return data
 
     def strip_crc(self, data):
         """ Return a new bytes object with CRC bytes removed (every 3rd byte). """
@@ -150,11 +146,13 @@ class SEN66:
         
     def reset(self):
         """ Reset the sensor. This has the same effect as a power cycle.
-        The device returns to idle mode after a reset.
+        The device returns to idle mode after a reset, and the altitude
+        setting is re-applied (a reset clears it like a power cycle would).
         Blocks for ~1200 ms (via __I2C_write) while the sensor reboots.
         """
         self.__I2C_write('device_reset')
         self.mode = 'idle'
+        self.set_sensor_altitude(self.altitude)
 
     def stop(self):
         if self.mode == 'idle':
@@ -175,6 +173,7 @@ class SEN66:
             raise ValueError('Altitude must be between 0 and 3000 meters')
         if self.mode != 'idle':
             raise Exception("Command 'set_sensor_altitude' requires mode 'idle', but current mode is '%s'!" % self.mode)
+        self.altitude = altitude
         high_byte = (altitude >> 8) & 0xff
         low_byte = altitude & 0xff
         crc = self.__CRC([high_byte, low_byte])
